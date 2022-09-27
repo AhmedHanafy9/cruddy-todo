@@ -8,46 +8,78 @@ var items = {};
 // Public API - Fix these CRUD functions ///////////////////////////////////////
 
 exports.create = (text, callback) => {
-  var id = counter.getNextUniqueId();
-  items[id] = text;
-  callback(null, { id, text });
+  counter.getNextUniqueId((err, fileData) => {
+    fs.writeFile(path.join(exports.dataDir, `${fileData}.txt`), text, (err) => {
+      if (err) {
+        console.log('error writing file');
+      } else {
+        callback(null, {id: fileData, text: text});
+      }
+    });
+  });
 };
+
+
 
 exports.readAll = (callback) => {
-  var data = _.map(items, (text, id) => {
-    return { id, text };
+  fs.readdir(exports.dataDir, (err, files) => {
+    if (err) {
+      throw ('error reading data folder');
+    }
+    var data = _.map(files, (file) => {
+      var id = path.basename(file, '.txt');
+      var filepath = path.join(exports.dataDir, file);
+      return new Promise((resolve, reject) => {
+        fs.readFile(path.join(exports.dataDir, `${id}.txt`), 'utf-8', (err, text) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve({id: id, text: text});
+          }
+        });
+      });
+    });
+    Promise.all(data)
+      .then(items => callback(null, items), err => callback(err));
   });
-  callback(null, data);
 };
+
+
 
 exports.readOne = (id, callback) => {
-  var text = items[id];
-  if (!text) {
-    callback(new Error(`No item with id: ${id}`));
-  } else {
-    callback(null, { id, text });
-  }
+  let dir = path.join(exports.dataDir, `${id}.txt`);
+  fs.readFile(dir, 'utf-8', (err, fileData) => {
+    if (err) {
+      callback(new Error(`Could not find file: ${id}`));
+    } else {
+      callback(null, {id, text: fileData});
+    }
+  });
 };
 
+
 exports.update = (id, text, callback) => {
-  var item = items[id];
-  if (!item) {
-    callback(new Error(`No item with id: ${id}`));
-  } else {
-    items[id] = text;
-    callback(null, { id, text });
-  }
+  let dir = path.join(exports.dataDir, `${id}.txt`);
+  fs.readFile(dir, 'utf-8', (err, fileData) => {
+    if (err) {
+      callback(new Error(`Could not find file: ${id}`));
+    } else {
+      fs.writeFile(dir, text, () => {
+        callback(null, {id, text});
+      });
+    }
+  });
 };
 
 exports.delete = (id, callback) => {
-  var item = items[id];
-  delete items[id];
-  if (!item) {
-    // report an error if item not found
-    callback(new Error(`No item with id: ${id}`));
-  } else {
-    callback();
-  }
+  let dir = path.join(exports.dataDir, `${id}.txt`);
+  fs.unlink(dir, (err) => {
+    if (err) {
+      callback(new Error(`Could not find file: ${id}`));
+    } else {
+      callback();
+    }
+  });
 };
 
 // Config+Initialization code -- DO NOT MODIFY /////////////////////////////////
@@ -59,3 +91,6 @@ exports.initialize = () => {
     fs.mkdirSync(exports.dataDir);
   }
 };
+
+
+
